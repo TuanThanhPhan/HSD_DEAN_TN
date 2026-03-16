@@ -67,32 +67,36 @@ class HybridHateSpeechModel(nn.Module):
         # shape: [batch, seq_len, 2304]
 
         # ===== CharCNN =====
+        # char_input: [B, S, L]
+        B, S, L = char_input.shape
+
         char_x = self.char_embedding(char_input)
-        # [batch, seq_len, 30]
+        # [B, S, L, 30]
+
+        char_x = char_x.view(B * S, L, 30)
+        # [B*S, L, 30]
 
         char_x = char_x.transpose(1, 2)
-        # [batch, 30, seq_len]
+        # [B*S, 30, L]
 
         char_x = torch.relu(self.char_cnn(char_x))
-        # [batch, 30, seq_len]
+        # [B*S, 30, L]
 
         char_x = self.char_pool(char_x)
-        # [batch, 30, 1]
+        # [B*S, 30, 1]
 
         char_x = char_x.squeeze(-1)
-        # [batch, 30]
+        # [B*S, 30]
 
         char_x = self.char_fc(char_x)
-        # [batch, 128]
+        # [B*S, 128]
 
-        # mở rộng vector char cho mỗi token
-        seq_len = bert_out.size(1)
-        char_x = char_x.unsqueeze(1).repeat(1, seq_len, 1)
-        # [batch, seq_len, 128]
+        char_x = char_x.view(B, S, 128)
+        # [B, S, 128]
 
-        # ===== Concat =====
+        # ===== Combine =====
         combined = torch.cat((bert_out, char_x), dim=2)
-        # [batch, seq_len, 2432]
+        # [B, S, 2432]
 
         # ===== BiLSTM =====
         lstm_out, _ = self.bilstm(combined)
