@@ -8,7 +8,18 @@ def load_teencode_dict(path="teencode_dict.txt"):
 
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            key, value = line.strip().split("\t")
+
+            line = line.strip()
+
+            if not line:
+                continue
+
+            parts = line.split("\t")
+
+            if len(parts) != 2:
+                continue
+
+            key, value = parts
             teencode_dict[key] = value
 
     return teencode_dict
