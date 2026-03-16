@@ -3,17 +3,13 @@ from pyvi import ViTokenizer
 
 # --- Load teencode_dict từ file ---
 def load_teencode_dict(path="teencode_dict.txt"):
+
     teencode_dict = {}
 
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
-
-            if not line or "," not in line:
-                continue
-
-            teencode, normal = line.split(",", 1)
-            teencode_dict[teencode.strip()] = normal.strip()
+            key, value = line.strip().split("\t")
+            teencode_dict[key] = value
 
     return teencode_dict
 
