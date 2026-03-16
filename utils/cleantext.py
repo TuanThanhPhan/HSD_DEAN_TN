@@ -2,7 +2,7 @@ import re
 from pyvi import ViTokenizer
 
 # --- Load teencode_dict từ file ---
-def load_teencode_dict(path="./teencode_dict.txt"):
+def load_teencode_dict(path="teencode_dict.txt"):
     teencode_dict = {}
 
     with open(path, "r", encoding="utf-8") as f:
