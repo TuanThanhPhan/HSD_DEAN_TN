@@ -13,7 +13,7 @@ from seed import set_seed
 
 from utils.cleantext import clean_text_pipeline
 from utils.dataloader import ViHSDDataset
-from utils.utils import build_char_vocab
+from utils.char_vocab import build_char_vocab
 
 from models.hybrid_model import HybridHateSpeechModel
 from trainer import Trainer
