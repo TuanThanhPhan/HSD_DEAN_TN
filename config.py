@@ -8,6 +8,6 @@ TRAIN_PATH = "data/processed/final_train.csv"
 DEV_PATH = "data/processed/final_dev.csv"
 TEST_PATH = "data/processed/final_test.csv"
 
-SAVE_DIR = "checkpoints"
+SAVE_DIR = "/content/drive/MyDrive/Checkpoints"
 
 CHAR_VOCAB_FILE = "char_vocab.pkl"
