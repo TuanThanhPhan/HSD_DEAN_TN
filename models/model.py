@@ -101,9 +101,10 @@ class HybridHateSpeechModel(nn.Module):
         # ===== BiLSTM =====
         lstm_out, _ = self.bilstm(combined)
 
-        # ===== Mean Pooling =====
-        final_feature = torch.mean(lstm_out, dim=1)
+        # ===== Masked Mean Pooling =====
+        mask = attention_mask.unsqueeze(-1).float()
+        lstm_out = lstm_out * mask
+        final_feature = lstm_out.sum(dim=1) / torch.clamp(mask.sum(dim=1), min=1e-9)
 
         logits = self.classifier(final_feature)
-
         return logits

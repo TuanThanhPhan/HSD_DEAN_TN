@@ -1,0 +1,114 @@
+import pickle
+import torch
+import pandas as pd
+import argparse
+
+from transformers import AutoTokenizer
+from torch.utils.data import DataLoader
+from sklearn.metrics import classification_report
+
+import config
+
+from utils.dataloader import ViHSDDataset
+from utils.cleantext import clean_text_pipeline
+
+from models.model import HybridHateSpeechModel
+from models.phobert_model import PhoBERTModel
+from models.visobert_model import ViSoBERTModel
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "--model_type",
+    type=str,
+    default="hybrid",
+    choices=["phobert", "visobert", "hybrid"]
+)
+
+parser.add_argument(
+    "--model_name",
+    type=str,
+    default="vinai/phobert-base"
+)
+
+parser.add_argument(
+    "--split",
+    type=str,
+    default="test",
+    choices=["dev", "test"]
+)
+
+args = parser.parse_args()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+
+
+# chọn dataset
+if args.split == "dev":
+    df = pd.read_csv(config.DEV_PATH)
+else:
+    df = pd.read_csv(config.TEST_PATH)
+
+
+df["free_text"] = df["free_text"].apply(clean_text_pipeline)
+
+with open(f"{config.SAVE_DIR}/{config.CHAR_VOCAB_FILE}", "rb") as f:
+    char_to_idx = pickle.load(f)
+
+dataset = ViHSDDataset(
+    df.free_text.values,
+    df.label_id.values,
+    tokenizer,
+    config.MAX_LEN,
+    char_to_idx
+)
+
+loader = DataLoader(dataset, batch_size=config.BATCH_SIZE)
+
+
+# chọn model
+if args.model_type == "phobert":
+    model = PhoBERTModel(args.model_name)
+
+elif args.model_type == "visobert":
+    model = ViSoBERTModel(args.model_name)
+
+elif args.model_type == "hybrid":
+    model = HybridHateSpeechModel(
+        args.model_name,
+        len(char_to_idx) + 2
+    )
+
+
+checkpoint = torch.load(
+    f"{config.SAVE_DIR}/{args.model_type}_best.pt",
+    map_location=device
+)
+
+model.load_state_dict(checkpoint["model_state_dict"])
+
+model.to(device)
+model.eval()
+
+preds = []
+
+with torch.no_grad():
+
+    for batch in loader:
+
+        input_ids = batch["input_ids"].to(device)
+        mask = batch["attention_mask"].to(device)
+
+        if args.model_type == "hybrid":
+            char_in = batch["char_input"].to(device)
+            logits = model(input_ids, mask, char_in)
+        else:
+            logits = model(input_ids, mask)
+
+        preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
+
+
+print(classification_report(df.label_id.values, preds))

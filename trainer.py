@@ -5,12 +5,14 @@ from sklearn.metrics import f1_score
 
 class Trainer:
 
-    def __init__(self, model, optimizer, criterion, device):
+    def __init__(self, model, optimizer, criterion, device, scheduler, model_type):
 
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
         self.device = device
+        self.scheduler = scheduler
+        self.model_type = model_type
 
     def train_epoch(self, loader):
 
@@ -18,16 +20,20 @@ class Trainer:
 
         total_loss = 0
 
-        for batch in tqdm(loader):
+        for batch in tqdm(loader, desc="Training"):
 
             self.optimizer.zero_grad()
 
             input_ids = batch["input_ids"].to(self.device)
             mask = batch["attention_mask"].to(self.device)
-            char_in = batch["char_input"].to(self.device)
             labels = batch["label"].to(self.device)
 
-            logits = self.model(input_ids, mask, char_in)
+            # Check rõ ràng loại model thay vì check key trong dict
+            if self.model_type == "hybrid":
+                char_in = batch["char_input"].to(self.device)
+                logits = self.model(input_ids, mask, char_in)
+            else:
+                logits = self.model(input_ids, mask)
 
             loss = self.criterion(logits, labels)
 
@@ -36,6 +42,7 @@ class Trainer:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
 
             self.optimizer.step()
+            self.scheduler.step()
 
             total_loss += loss.item()
 
@@ -50,14 +57,17 @@ class Trainer:
 
         with torch.no_grad():
 
-            for batch in loader:
+            for batch in tqdm(loader, desc="Evaluating"):
 
                 input_ids = batch["input_ids"].to(self.device)
                 mask = batch["attention_mask"].to(self.device)
-                char_in = batch["char_input"].to(self.device)
                 labels = batch["label"].to(self.device)
 
-                logits = self.model(input_ids, mask, char_in)
+                if self.model_type == "hybrid":
+                    char_in = batch["char_input"].to(self.device)
+                    logits = self.model(input_ids, mask, char_in)
+                else:
+                    logits = self.model(input_ids, mask)
 
                 pred = torch.argmax(logits, dim=1)
 
