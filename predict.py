@@ -29,7 +29,7 @@ parser.add_argument(
 parser.add_argument(
     "--model_name",
     type=str,
-    default="vinai/phobert-base"
+    default=None
 )
 
 parser.add_argument(
@@ -40,6 +40,13 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+# Tự động chọn model_name tương ứng với model_type nếu người dùng không truyền vào
+if args.model_name is None:
+    if args.model_type in ["phobert", "hybrid"]:
+        args.model_name = "vinai/phobert-base"
+    elif args.model_type == "visobert":
+        args.model_name = "uitnlp/visobert" 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
