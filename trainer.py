@@ -42,7 +42,6 @@ class Trainer:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
 
             self.optimizer.step()
-            self.scheduler.step()
 
             total_loss += loss.item()
 

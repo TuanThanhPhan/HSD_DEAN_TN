@@ -5,7 +5,7 @@ import argparse
 
 from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, f1_score
 
 import config
 
@@ -119,3 +119,6 @@ with torch.no_grad():
 
 
 print(classification_report(df.label_id.values, preds))
+print("-" * 50)
+macro_f1 = f1_score(df.label_id.values, preds, average="macro")
+print(f"OVERALL MACRO-F1: {macro_f1:.4f}")

@@ -62,7 +62,7 @@ class HybridHateSpeechModel(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(hidden_dim * 2, 128),
             nn.Mish(), # Dùng Mish activation tốt hơn ReLU
-            nn.Dropout(0.3),
+            nn.Dropout(0.2),
             nn.Linear(128, 64),
             nn.Mish(),
             nn.Linear(64, 3)
@@ -84,14 +84,14 @@ class HybridHateSpeechModel(nn.Module):
 
         conv_results = []
         for conv in self.convs:
-            c = torch.relu(conv(char_x))
+            c = torch.nn.functional.mish(conv(char_x)) 
             c, _ = torch.max(c, dim=2) # Max-over-time pooling cho ký tự
             conv_results.append(c)
         
-        char_feat = torch.cat(conv_results, dim=1) # [B*S, 150]
-        char_feat = torch.relu(self.char_fc(char_feat)) # [B*S, 128]
-        char_feat = char_feat.view(B, S, 128) # [B, S, 128]
-
+        char_feat = torch.cat(conv_results, dim=1) 
+        char_feat = torch.nn.functional.mish(self.char_fc(char_feat)) 
+        char_feat = char_feat.view(B, S, 128)
+        
         # --- Hybrid Combine ---
         combined = torch.cat((bert_out, char_feat), dim=2) # [B, S, 384]
         lstm_out, _ = self.bilstm(combined) # [B, S, 256]
