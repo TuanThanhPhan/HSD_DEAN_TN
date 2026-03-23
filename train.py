@@ -143,11 +143,21 @@ def main():
         label_smoothing=0.05
     )
 
-    # ===== Optimizer =====
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=config.LR
-    )
+    # ===== Optimizer với Differential Learning Rates =====
+    if args.model_type == "hybrid":
+        # Gom các tham số của PhoBERT gốc (đã có tri thức sẵn)
+        phobert_params = list(model.phobert.parameters())
+        # Gom các tham số mới hoàn toàn (reduce_phobert, CharCNN, BiLSTM, Classifier)
+        # Chúng ta dùng "phobert." (có dấu chấm) để tránh nhầm với "reduce_phobert"
+        custom_params = [p for n, p in model.named_parameters() if "phobert." not in n]
+        optimizer = optim.AdamW([
+            {'params': phobert_params, 'lr': config.LR},      # 2e-5 (Fine-tuning)
+            {'params': custom_params, 'lr': 5e-4}             # 5e-4 (Học nhanh các lớp mới)
+        ], weight_decay=0.01)
+        print(f"Initialized Hybrid Optimizer: PhoBERT LR={config.LR}, Custom LR=5e-4")
+    else:
+        optimizer = optim.AdamW(model.parameters(), lr=config.LR)
+        print(f"Initialized Baseline Optimizer: LR={config.LR}")
 
     # ===== Warmup Scheduler =====
     num_training_steps = len(train_loader) * config.EPOCHS
