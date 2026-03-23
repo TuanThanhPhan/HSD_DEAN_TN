@@ -136,19 +136,10 @@ def main():
 
     model.to(device)
 
-    # ===== Compute class weights =====
+    # Tính trọng số lớp để cấp cho Focal Loss
     labels = train_df.label_id.values
-
-    class_weights = compute_class_weight(
-        class_weight="balanced",
-        classes=np.unique(labels),
-        y=labels
-    )
-
-    class_weights = torch.tensor(
-        class_weights,
-        dtype=torch.float
-    ).to(device)
+    class_weights = compute_class_weight(class_weight="balanced", classes=np.unique(labels), y=labels)
+    class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
 
     # FocalLoss
     criterion = FocalLoss(weight=class_weights, gamma=2)
@@ -159,10 +150,11 @@ def main():
         custom_params = [p for n, p in model.named_parameters() if "phobert." not in n]
         optimizer = optim.AdamW([
             {'params': phobert_params, 'lr': 1e-5}, # Giảm LR PhoBERT xuống để tránh Overfitting
-            {'params': custom_params, 'lr': 2e-4}  # Giảm LR lớp Custom để hội tụ mượt hơn
+            {'params': custom_params, 'lr': 5e-5}  # Giảm LR lớp Custom để hội tụ mượt hơn
         ], weight_decay=0.05) # Tăng weight_decay để mô hình học các quy luật chung tốt hơn
     else:
-        optimizer = optim.AdamW(model.parameters(), lr=config.LR)
+        # Baseline cũng học chậm lại để tránh Overfitting
+        optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.05)
 
     # Linear Warmup bằng CosineAnnealingLR (Chu kỳ giảm dần hình Cosine)
     scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
