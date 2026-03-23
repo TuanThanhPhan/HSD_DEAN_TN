@@ -9,7 +9,7 @@ import argparse
 
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
-from transformers import get_linear_schedule_with_warmup
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.utils.class_weight import compute_class_weight
 from torch.utils.tensorboard import SummaryWriter
 
@@ -26,6 +26,19 @@ from models.visobert_model import ViSoBERTModel
 from trainer import Trainer
 
 
+# Định nghĩa Focal Loss để xử lý dữ liệu mất cân bằng
+class FocalLoss(nn.Module):
+    def __init__(self, weight=None, gamma=2):
+        super(FocalLoss, self).__init__()
+        self.weight = weight
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        ce_loss = nn.CrossEntropyLoss(weight=self.weight, reduction='none')(inputs, targets)
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
+        return focal_loss
+    
 def main():
     # ===== Định nghĩa tham số dòng lệnh =====
     parser = argparse.ArgumentParser()
@@ -137,35 +150,22 @@ def main():
         dtype=torch.float
     ).to(device)
 
-    # ===== Loss function =====
-    criterion = nn.CrossEntropyLoss(
-        weight=class_weights,
-        label_smoothing=0.05
-    )
+    # FocalLoss
+    criterion = FocalLoss(weight=class_weights, gamma=2)
 
-    # ===== Optimizer với Differential Learning Rates =====
+    # Tinh chỉnh Optimizer cho Hybrid
     if args.model_type == "hybrid":
-        # Gom các tham số của PhoBERT gốc (đã có tri thức sẵn)
         phobert_params = list(model.phobert.parameters())
-        # Gom các tham số mới hoàn toàn (reduce_phobert, CharCNN, BiLSTM, Classifier)
-        # Chúng ta dùng "phobert." (có dấu chấm) để tránh nhầm với "reduce_phobert"
         custom_params = [p for n, p in model.named_parameters() if "phobert." not in n]
         optimizer = optim.AdamW([
-            {'params': phobert_params, 'lr': config.LR},      # 2e-5 (Fine-tuning)
-            {'params': custom_params, 'lr': 5e-4}             # 5e-4 (Học nhanh các lớp mới)
-        ], weight_decay=0.01)
-        print(f"Initialized Hybrid Optimizer: PhoBERT LR={config.LR}, Custom LR=5e-4")
+            {'params': phobert_params, 'lr': 1e-5}, # Giảm LR PhoBERT xuống để tránh Overfitting
+            {'params': custom_params, 'lr': 2e-4}  # Giảm LR lớp Custom để hội tụ mượt hơn
+        ], weight_decay=0.05) # Tăng weight_decay để mô hình học các quy luật chung tốt hơn
     else:
         optimizer = optim.AdamW(model.parameters(), lr=config.LR)
-        print(f"Initialized Baseline Optimizer: LR={config.LR}")
 
-    # ===== Warmup Scheduler =====
-    num_training_steps = len(train_loader) * config.EPOCHS
-    num_warmup_steps = int(0.1 * num_training_steps)
-
-    scheduler = get_linear_schedule_with_warmup(optimizer,
-    num_warmup_steps=num_warmup_steps,
-    num_training_steps=num_training_steps)
+    # Linear Warmup bằng CosineAnnealingLR (Chu kỳ giảm dần hình Cosine)
+    scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
 
     # Truyền args.model_type vào Trainer
     trainer = Trainer(model, optimizer, criterion, device, scheduler, args.model_type)
@@ -197,6 +197,8 @@ def main():
 
         train_loss = trainer.train_epoch(train_loader)
         dev_f1 = trainer.eval_epoch(dev_loader)
+        
+        scheduler.step()
 
         print(f"\nEpoch {epoch+1}/{config.EPOCHS}")
         print(f"Train loss: {train_loss:.4f}")
