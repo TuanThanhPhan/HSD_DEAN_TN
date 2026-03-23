@@ -100,4 +100,4 @@ class HybridHateSpeechModel(nn.Module):
         attn_out = self.attention(lstm_out, attention_mask)
 
         # --- Output ---
-        return self.classifier(mean_pooled)
+        return self.classifier(attn_out)
