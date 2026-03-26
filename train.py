@@ -9,7 +9,7 @@ import argparse
 
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from transformers import get_linear_schedule_with_warmup
 from sklearn.utils.class_weight import compute_class_weight
 from torch.utils.tensorboard import SummaryWriter
 
@@ -149,15 +149,27 @@ def main():
         phobert_params = list(model.phobert.parameters())
         custom_params = [p for n, p in model.named_parameters() if "phobert." not in n]
         optimizer = optim.AdamW([
-            {'params': phobert_params, 'lr': 1e-5}, # Giảm LR PhoBERT xuống để tránh Overfitting
-            {'params': custom_params, 'lr': 5e-5}  # Giảm LR lớp Custom để hội tụ mượt hơn
-        ], weight_decay=0.05) # Tăng weight_decay để mô hình học các quy luật chung tốt hơn
+            {'params': model.phobert.parameters(), 'lr': 2e-5},
+            {'params': model.char_embedding.parameters(), 'lr': 5e-4},
+            {'params': model.convs.parameters(), 'lr': 5e-4},
+            {'params': model.char_fc.parameters(), 'lr': 5e-4},
+            {'params': model.fusion.parameters(), 'lr': 1e-4},
+            {'params': model.bilstm.parameters(), 'lr': 1e-4},
+            {'params': model.classifier.parameters(), 'lr': 1e-4}
+], weight_decay=0.01)
     else:
         # Baseline cũng học chậm lại để tránh Overfitting
         optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.05)
+    
+    # Linear Warmup
+    num_training_steps = len(train_loader) * config.EPOCHS
+    num_warmup_steps = int(0.1 * num_training_steps)
 
-    # Linear Warmup bằng CosineAnnealingLR (Chu kỳ giảm dần hình Cosine)
-    scheduler = CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps,
+        num_training_steps
+    )
 
     # Truyền args.model_type vào Trainer
     trainer = Trainer(model, optimizer, criterion, device, scheduler, args.model_type)
